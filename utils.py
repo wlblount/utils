@@ -1,8 +1,7 @@
 from datetime import datetime 
 import pandas as pd
 import pytz
-import openpyxl
-import pyarrow
+
 #-------------------------------------------------------------------
 
 def renCol(df,a):
@@ -109,100 +108,49 @@ def get_trading_close_holidays(year):
     return inst.holidays(dt.datetime(year-1, 12, 31), dt.datetime(year, 12, 31))
 
 
-def excel_columns_to_indices(columns):
-    """Convert Excel-style columns (like 'A', 'D') to pandas indices (0, 3).
-    to be used in module impxl
+def impxl(file_path, 
+          index_column,
+          other_columns,
+          sheet_name='Sheet1'):
     """
-    indices = [ord(col.upper()) - ord('A') for col in columns]
-    return indices
+    Import specified columns from an Excel sheet into a pandas DataFrame.
 
-import openpyxl
-import pyarrow
-import pandas as pd
-import numpy as np
-
-def excel_columns_to_indices(columns):
-    """Convert Excel-style columns (like 'A', 'D') to pandas indices (0, 3).
-    to be used in module impxl
-    """
-    indices = [ord(col.upper()) - ord('A') for col in columns]
-    return indices
-
-def impxl(file_path, sheet_name='Sheet1', index_col=None, excel_columns=None, column_names=None, header=None):
-    """
-    Extract specified columns from an Excel sheet, set the specified column as a datetime index if applicable,
-    and convert other columns to numeric types if possible.
-
-    Parameters:
+    Parameters
     ----------
     file_path : str
         The path to the Excel file to be read.
+    index_column : str
+        The name of the column to be used as the index.
+    other_columns : list of str
+        A list of column names to be imported along with the index column.
     sheet_name : str, optional
-        The name of the sheet within the Excel file to extract data from. Defaults to 'Sheet1'.
-    index_col : str
-        The Excel-style column reference to use as the index (e.g., 'A').
-    excel_columns : list of str
-        A list of Excel-style column references to extract (e.g., ['M', 'B']).
-    column_names : list of str
-        A list of custom column names where the first element is the index name (e.g., ['date', 'NAV', 'OtherCol']).
+        The name of the sheet to read data from. Defaults to 'Sheet1'.
 
-    header : int, list of int, None, optional
-        Indicates row(s) to use as the column names. Defaults to None.
-
-    Returns:
+    Returns
     -------
     pd.DataFrame
-        A DataFrame with the specified index column, either as a datetime, numeric, or text index, and the other columns as numeric types if possible.
+        A DataFrame containing the specified columns, with the index column set as the DataFrame's index.
+    
+    Example
+    -------
+    >>> file_path = "C:/path/to/your/file.xlsx"
+    >>> index_column = 'nameOfIndexCol'
+    >>> other_columns = ['nameOfOtherColumn1', 'nameOfOtherColumn2']
+    >>> sheet_name = 'nameOfTheSheet'
+    >>> df = impxl(file_path, index_column, other_columns, sheet_name)
+    >>> print(df.head())
     """
-    # Combine the index column with the other columns to extract
-    columns_to_extract = ([index_col] if index_col else []) + (excel_columns if excel_columns else [])
-    if columns_to_extract:
-        column_indices = excel_columns_to_indices(columns_to_extract)
-    else:
-        column_indices = None
+    # Combine the index column with the other columns to read from the Excel file
+    columns_to_read = [index_column] + other_columns
     
-    # Load the specific sheet using the openpyxl engine for better compatibility with Excel files
-    df = pd.read_excel(file_path, sheet_name=sheet_name, usecols=column_indices if column_indices is not None else None, header=header, engine='openpyxl')
+    # Read the Excel file, specifying the header row and columns to read
+    df = pd.read_excel(file_path, sheet_name=sheet_name, usecols=columns_to_read, header=0)
     
-    try:
-        # Assign custom column names
-        df.columns = column_names
-        df.reset_index(drop=True, inplace=True)
-    except ValueError as e:
-        print("ValueError:", e)
-        print("\nExplanation: This error occurs when the number of columns being read from the Excel file does not match the number of column names provided. Make sure that the length of 'column_names' matches the number of columns being extracted from the Excel file.")
-        raise
-
-    # Detect the type of the index column and convert accordingly
-    index_name = column_names[0]
-    sample_values = df[index_name].head(10)
-
-    # Determine if the index column should be datetime, numeric, or text
-    if pd.to_numeric(sample_values, errors='coerce').notna().sum() == len(sample_values):
-        # If all values can be parsed as numbers, treat the entire column as numeric
-        df[index_name] = pd.to_numeric(df[index_name], errors='coerce')
-        df.set_index(index_name, inplace=True)
-        df.index.name = index_name
-    elif pd.to_datetime(sample_values, errors='coerce').notna().sum() == len(sample_values):
-        import warnings
-        warnings.filterwarnings('ignore', category=UserWarning, message='Could not infer format, so each element will be parsed individually, falling back to `dateutil`')
-        # If all values can be parsed as dates, treat the entire column as datetime
-        df[index_name] = pd.to_datetime(df[index_name], errors='coerce')
-        df.set_index(index_name, inplace=True)
-        df.index.name = index_name
-        # Drop rows where the index is NaT (missing dates)
-        df = df[df.index.notnull()]
-    else:
-        # Otherwise, treat the index column as text
-        df[index_name] = df[index_name].astype(str)
-        df.set_index(index_name, inplace=True)
-        df.index.name = index_name
-
-    # Convert the remaining columns to numeric types if possible, but keep original values if conversion fails
-    for col in column_names[1:]:
-        try:
-            df[col] = pd.to_numeric(df[col], errors='raise')
-        except ValueError:
-            df[col] = df[col].astype(str)
-
+    # Set the index column
+    df.set_index(index_column, inplace=True)
+    
+    # Return the DataFrame
     return df
+
+
+
