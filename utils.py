@@ -114,8 +114,8 @@ def get_trading_close_holidays(year):
 def impxl(file_path, 
           index_column,
           other_columns,
-          sheet_name='Sheet1')
-          header=0:
+          sheet_name='Sheet1',
+          header=0):
     """
     Import specified columns from an Excel sheet into a pandas DataFrame.
 
