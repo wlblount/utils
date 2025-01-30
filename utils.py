@@ -1,11 +1,22 @@
-#  version 1.0.0 11/11/2024  10:10 AM
-
+##edited 1/31/25
 
 from datetime import datetime 
+from io import StringIO
+from pandas.tseries.holiday import (
+    AbstractHolidayCalendar,
+    Holiday,
+    nearest_workday,
+    USFederalHolidayCalendar
+)
+
+from pandas.tseries.offsets import CustomBusinessDay
+import csv
+import datetime as dt
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pytz
 
-#-------------------------------------------------------------------
 
 def renCol(df,a):
     '''
@@ -20,6 +31,8 @@ outputs:  a new df with the new column name
 
 
 #-------------------------------------------------------------------
+
+
 def symlistConv(syms):
     '''takes a list of symbols ['A', 'B', 'C'] and converts to
     a fmp multisymbol string format for their API call urls like 'A,B,C'
@@ -33,7 +46,16 @@ import pandas as pd
 from pandas.tseries.holiday import USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
 
+
+
 def ddelt(d, start=pd.Timestamp.today()):
+    '''
+    input: d = number of days as an int 
+           start= reference date as str 'YYYY-mm-dd'
+           returns the date of d days prior to start as str 'YYYY-mm-dd'
+         
+    
+    '''
     trading_calendar = USFederalHolidayCalendar()
     bday_us = CustomBusinessDay(calendar=trading_calendar)
     today = start
@@ -41,7 +63,7 @@ def ddelt(d, start=pd.Timestamp.today()):
     holidays_last_days = trading_calendar.holidays(start=last_business_days[0], end=last_business_days[-1])
     for holiday in holidays_last_days:
         last_business_days = last_business_days[last_business_days != holiday]
-    return last_business_days[-d-1].strftime('%Y-%m-%d')
+    return last_business_days[-d].strftime('%Y-%m-%d')
 
 #--------------------------------------------------------------------------------------------------
 
@@ -50,10 +72,22 @@ from pandas.tseries.holiday import USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
 
 
-def ytd():
+
+
+
+
+def ytd(today = pd.Timestamp.today()):
+    '''
+    input: date as a string 'YYYY-mm-dd' default is today
+    returns:  trading day of that year as int
+    
+    '''
+    
+    if isinstance(today, str):
+        today = pd.to_datetime(today)
+    
     trading_calendar = USFederalHolidayCalendar()
     bday_us = CustomBusinessDay(calendar=trading_calendar)
-    today = pd.Timestamp.today()
     last_year_end = pd.Timestamp(year=today.year-1, month=12, day=31)
     last_year_bdays = pd.date_range(start=last_year_end, end=today, freq=bday_us)
     holidays_last_year = trading_calendar.holidays(start=last_year_end, end=today)
@@ -61,8 +95,31 @@ def ytd():
         last_year_bdays = last_year_bdays[last_year_bdays != holiday]
     return len(last_year_bdays)
 
+#---------------------------------------------------------------------------------------------------
 
-#-------------------------------------------------------------------------------------------------------
+
+import datetime as dt
+
+from pandas.tseries.holiday import AbstractHolidayCalendar, Holiday, nearest_workday, \
+    USMartinLutherKingJr, USPresidentsDay, GoodFriday, USMemorialDay, \
+    USLaborDay, USThanksgivingDay
+
+
+class USTradingCalendar(AbstractHolidayCalendar):
+    rules = [
+        Holiday('NewYearsDay', month=1, day=1, observance=nearest_workday),
+        USMartinLutherKingJr,
+        USPresidentsDay,
+        GoodFriday,
+        USMemorialDay,
+        Holiday('USIndependenceDay', month=7, day=4, observance=nearest_workday),
+        USLaborDay,
+        USThanksgivingDay,
+        Holiday('Christmas', month=12, day=25, observance=nearest_workday)
+    ]
+
+
+
 
 def listFrSht(sName='Sectors', fpath='helperfiles/tickerLists.xlsx'):
     '''
@@ -74,6 +131,8 @@ def listFrSht(sName='Sectors', fpath='helperfiles/tickerLists.xlsx'):
     return pd.read_excel(fpath, sheet_name=sName, header=None).loc[:,0].tolist()   
 
 #----------------------------------------------------------------------------
+
+
 def tvsymexp(fpath='helperfiles/Macro.txt'):
     '''enter path and file of txt file exported from trading view
        helperfiles/Macro.txt'''
@@ -105,10 +164,19 @@ class USTradingCalendar(AbstractHolidayCalendar):
     ]
 
 
-def get_trading_close_holidays(year):
+
+
+def get_trading_close_holidays(year=datetime.today().year):
+    '''
+    inputs:  year as int. 
+    returns: a datetime index of holiday dates
+    '''
     inst = USTradingCalendar()
 
     return inst.holidays(dt.datetime(year-1, 12, 31), dt.datetime(year, 12, 31))
+
+#------------------------------------------------------------------------------------
+
 
 
 def impxl(file_path, 
@@ -155,6 +223,277 @@ def impxl(file_path,
     
     # Return the DataFrame
     return df
+
+
+
+
+
+def make_clickable(val):
+        return f'<a target="_blank" href="{val}">{val}</a>'
+    
+#-----------------------------------------------------------------    
+
+
+
+
+
+def lr(X, Y, _print=True):
+    '''
+General Linear Regression function
+
+inputs
+    X: series or dataframe columns for the independent variable
+    Y: series or dataframe columns for the dependent variable
+    _print: (Bool) True returns a printout of the regression coefficients and the coefficients
+                   False only returns the coefficients: slope, intercept, r_value, p_value, std_err
+                   
+outputs: slope, intercept, r_value, p_value, std_err                   
+    
+    '''
+    from scipy.stats import linregress
+    # calculate the regression equation
+    slope, intercept, r_value, p_value, std_err = linregress(X, Y)
+    if _print:
+    # print the regression equation
+        print(f'eq:  y = {slope: .3f}x + {intercept:.3f}')   
+        print(f'std er:  {std_err: .3f}')
+        print(f'r value:  {r_value:.3f}')    
+        print(f'p value: {p_value: .3f}')
+    return slope, intercept, r_value, p_value, std_err
+
+
+#-----------------------------------------------------------------------------
+
+
+
+def remove_chars(lst):
+    '''
+cleans up FMP symbols from screen.  remove symbols with "." (foreigh stocks)
+and symboils with "-" (preferred stocks)
+    '''
+    return [item for item in lst if "-" not in item and "." not in item]
+
+
+#------------------------------------------------------------------------------
+
+
+
+def cagr(start_date, end_date, start_value, end_value):
+    # Convert date strings to datetime objects
+    start_date = datetime.strptime(start_date, '%Y-%m-%d')
+    end_date = datetime.strptime(end_date, '%Y-%m-%d')
+
+    # Calculate the number of years
+    num_years = (end_date - start_date).days / 365.25
+
+    # Avoid division by zero
+    if start_value == 0 or num_years == 0:
+        raise ValueError("Start value and number of years must be non-zero")
+
+    # Calculate CAGR
+    cagr = (end_value / start_value) ** (1 / num_years) - 1
+
+    return cagr
+
+#-----------------------------------------------------------    ----------------------
+
+
+def dfcagr(df):
+
+    """
+    Calculate the Compound Annual Growth Rate (CAGR) from a DataFrame.
+
+    Parameters:
+    df (pandas.DataFrame): A DataFrame with a datetime index and a single column of revenue values.
+
+    Returns:
+    float: The CAGR as a percentage.
+    """
+    # Ensure the DataFrame is sorted by date
+    df = df.sort_index()
+
+    # Calculate Beginning and Ending Values
+    beginning_value = df.iloc[0, 0]
+    ending_value = df.iloc[-1, 0]
+
+    # Calculate the number of years (time period in years)
+    n = len(df) - 1
+
+    # Calculate CAGR
+    CAGR = (ending_value / beginning_value) ** (1 / n) - 1
+
+    # Convert to percentage
+    CAGR_percentage = CAGR * 100
+
+    return CAGR_percentage
+
+#----------------------------------------------------------------------------------
+import csv
+from io import StringIO
+
+
+
+def string_to_csv(input_string, csv_file_path):
+    '''
+    ****Only works on text****
+    1 - copy a column of text from a spreadsheet and paste into a notebook
+    2 - surround text with triple quotes and name...  'text=''''pasted text''''
+    3 - input: 'text' output: 'text.csv'
+    
+    '''
+    # Using StringIO to simulate reading from a file-like object
+    fake_file = StringIO(input_string)
+
+    # Using csv.writer to write each line as a separate row in the CSV file
+    with open(csv_file_path, 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerows([[line.strip()] for line in fake_file])
+#---------------------------------------------------------------
+
+
+
+def parse_multi_line_string(input_string):
+    return input_string.strip().split('\n')
+
+#---------------------------------------------------------------
+
+
+def csv_to_list(csv_file_path):
+    '''
+    input: csv file path to a one column csv
+    ouput: a list
+    '''
+    result_list = []
+    with open(csv_file_path, 'r') as csvfile:
+        csv_reader = csv.reader(csvfile)
+        for row in csv_reader:
+            result_list.append(row[0])
+    return result_list
+#----------------------------------------------------------------------
+
+
+def tsConvert(timestamp_ms):
+    '''converts a ts object like 1677790926832 into
+    a datetime object'''
+    # Convert milliseconds to seconds
+    timestamp_s = timestamp_ms / 1000
+    
+    # Convert to datetime object
+    datetime_obj = datetime.fromtimestamp(timestamp_s)
+    
+    # Print the result
+    return(datetime_obj)
+
+
+#----------------------------------------------------------------------
+
+
+def splitSymWeights(varForData):
+    '''For importing citrindex from excel into a notebook 
+       and converting 
+       input:  a 2 column paste from excel like
+           WMS	0.17%
+           ACM	0.06%
+           ALFA	0.18%
+           ATMU	0.15%
+           BMI	0.33%
+       returns:  a tuple of 2 lists... string:symbols and float:weights 
+    
+        '''
+    
+    # Split the data into lines
+    lines = data.strip().split('\n')
+    
+    # Initialize the lists
+    symbols = []
+    weights = []
+    
+    # Process each line
+    for line in lines:
+        symbol_part, weight_part = line.split()
+        symbols.append(symbol_part)
+        # Remove the '%' character and convert to float
+        weights.append(float(weight_part.strip('%')))
+    return symbols,weights  
+
+#---------------------------------------------------------------
+
+
+
+def histVol(ser, lbk=60):
+    '''
+    input: a series of  prices
+    lbk: the number of days to calculate
+    returns:  annualized hist vol from a price series using:
+    (np.std(np.log(ser/ser.shift()), axis=0)*252**.5
+    which is sdt of log returns multiplied by the sqrt of 252
+    
+    '''
+    ser=ser[-lbk:]
+    return np.round(np.std(np.log(ser/ser.shift()), axis=0)*252**.5*100,1)
+
+#------------------------------------------------------------------------
+
+
+
+def beta(df, mkt='SPY', lbk=100):
+    
+    '''
+    inputs:
+    df: a single column dataframe of prices
+    mkt: str symbol
+    lbk: int days
+    returns: float'''
+    
+    dff=fmp_price(mkt, start=utils.ddelt(len(df)+1))
+    newdf=pd.concat([df,dff], axis=1).dropna()
+    
+
+    
+    x = newdf.iloc[:,1].tolist()[-(lbk+1):]
+    y = newdf.iloc[:,0].tolist()[-(lbk+1):]
+
+    df = pd.DataFrame(list(zip(x, y)), columns=['x', 'y'])
+    df = np.log(df/df.shift()).dropna()
+
+    cov = df.cov()
+    var = df['x'].var()
+    m=cov/var
+    #time.sleep(.04)
+    print('lookback = ', len(df))
+    return np.round(m.iloc[0,1], 2)
+
+#-------------------------------------------------------------------------
+# Set the y-axis formatter
+
+
+def y_fmt(y, pos):
+    # If y is 0, return 0
+    if y == 0:
+        return '0'
+    # Exponents for thousands, millions, billions
+    exp = int(np.log10(abs(y)))
+    if exp >= 9:
+        return '{:.1f}B'.format(y / 1e9)
+    elif exp >= 6:
+        return '{:.1f}M'.format(y / 1e6)
+    elif exp >= 3:
+        return '{:.1f}K'.format(y / 1e3)
+    else:
+        return '{:.0f}'.format(y)
+
+#--------------------------------------------------------------------------
+
+
+
+def myPlot(data, kind='line'):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    data.plot(kind=kind,ax=ax)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(y_fmt))
+    plt.legend()
+    plt.grid(alpha=0.5, linestyle='--')
+
+
 
 
 
