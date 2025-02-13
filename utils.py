@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytz
-##an assortment of utilities 1/30/25    http://localhost:8888/files/utils2.py?_xsrf=2%7C99db802f%7C89f4b4ca8ca6b51ddb8ecd532175eec7%7C1735847160
+
 #-------------------------------------------------------------------
 
 def renCol(df, a):
