@@ -1,4 +1,4 @@
-##edited 2/12/25  merged the 2 rogue versions and saved to Github
+##edited 2/17/25  modified cagr and added cagrTS, added dateSlice
 
 from datetime import datetime 
 from io import StringIO
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytz
-
+##an assortment of utilities 1/30/25    http://localhost:8888/files/utils2.py?_xsrf=2%7C99db802f%7C89f4b4ca8ca6b51ddb8ecd532175eec7%7C1735847160
 #-------------------------------------------------------------------
 
 def renCol(df, a):
@@ -159,32 +159,76 @@ and symboils with "-" (preferred stocks)
     """
     return [item for item in lst if '-' not in item and '.' not in item]
 
+from datetime import datetime
+
 def cagr(start_date, end_date, start_value, end_value):
+    """
+    Calculate the Compound Annual Growth Rate (CAGR).
+
+    CAGR is the rate at which an investment grows annually over a specified period, 
+    assuming compounding occurs at a constant rate.
+
+    Parameters:
+        start_date (str): The start date in the format 'YYYY-MM-DD'.
+        end_date (str): The end date in the format 'YYYY-MM-DD'.
+        start_value (float): The initial value of the investment or metric.
+        end_value (float): The final value of the investment or metric.
+
+    Returns:
+        float: The CAGR as a decimal (e.g., 0.10 for 10%).
+
+    Raises:
+        ValueError: If `start_value` is zero (to prevent division errors).
+        ValueError: If the number of years between `start_date` and `end_date` is zero.
+
+    Example:
+        >>> cagr('2015-01-01', '2020-01-01', 1000, 2000)
+        0.1487  # (14.87% annual growth)
+    """
     start_date = datetime.strptime(start_date, '%Y-%m-%d')
     end_date = datetime.strptime(end_date, '%Y-%m-%d')
-    num_years = (end_date - start_date).days / 365.25
+    num_years = (end_date - start_date).days / 365.25  # Account for leap years
+
     if start_value == 0 or num_years == 0:
         raise ValueError('Start value and number of years must be non-zero')
+
     cagr = (end_value / start_value) ** (1 / num_years) - 1
     return cagr
 
-def dfcagr(df):
-    """
-    Calculate the Compound Annual Growth Rate (CAGR) from a DataFrame.
 
+def cagrTS(data):
+    """
+    Calculate CAGR (Compound Annual Growth Rate) for a given Pandas Series or all columns in a DataFrame.
+    
     Parameters:
-    df (pandas.DataFrame): A DataFrame with a datetime index and a single column of revenue values.
+        data (pd.Series or pd.DataFrame): A time-series Pandas Series or DataFrame with a datetime index.
 
     Returns:
-    float: The CAGR as a percentage.
+        float (if Series) or pd.Series (if DataFrame) with CAGR values.
     """
-    df = df.sort_index()
-    beginning_value = df.iloc[0, 0]
-    ending_value = df.iloc[-1, 0]
-    n = len(df) - 1
-    CAGR = (ending_value / beginning_value) ** (1 / n) - 1
-    CAGR_percentage = CAGR * 100
-    return CAGR_percentage
+    data = data.dropna()  # Ensure no missing values
+    if data.empty or len(data) < 2:
+        return None  # Not enough data points to calculate CAGR
+    
+    # Calculate number of years
+    n_years = (data.index[-1] - data.index[0]).days / 365.25  # Account for leap years
+    
+    if isinstance(data, pd.Series):
+        # If input is a Series, calculate CAGR for that Series
+        V_i, V_f = data.iloc[0], data.iloc[-1]
+        return (V_f / V_i) ** (1 / n_years) - 1 if V_i > 0 else None
+    
+    elif isinstance(data, pd.DataFrame):
+        # If input is a DataFrame, calculate CAGR for each column
+        cagr_dict = {}
+        for col in data.columns:
+            col_data = data[col].dropna()
+            if len(col_data) < 2:
+                cagr_dict[col] = None
+            else:
+                V_i, V_f = col_data.iloc[0], col_data.iloc[-1]
+                cagr_dict[col] = (V_f / V_i) ** (1 / n_years) - 1 if V_i > 0 else None
+        return pd.Series(cagr_dict)
 
 def string_to_csv(input_string, csv_file_path):
     """
@@ -292,3 +336,29 @@ def myPlot(data, kind='line'):
     ax.yaxis.set_major_formatter(plt.FuncFormatter(y_fmt))
     plt.legend()
     plt.grid(alpha=0.5, linestyle='--')
+
+
+
+def dateSlice(df, years=5):
+    
+    """
+    Slice a datetime-indexed DataFrame to keep only the most recent `years` of data.
+
+    Parameters:
+        df (pd.DataFrame): A Pandas DataFrame with a DatetimeIndex.
+        years (int, optional): Number of years to keep (default is 5).
+
+    Returns:
+        pd.DataFrame: A DataFrame containing only the most recent `years` of data.
+    """
+    if df.empty or not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("The DataFrame must have a DatetimeIndex and cannot be empty.")
+
+    # Determine the most recent date in the DataFrame
+    latest_date = df.index.max()
+    
+    # Calculate the cutoff date
+    cutoff_date = latest_date - pd.DateOffset(years=years)
+
+    # Slice the DataFrame to keep only data from the last `years`
+    return df[df.index >= cutoff_date]
