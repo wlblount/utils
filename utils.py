@@ -28,9 +28,9 @@ import json
 import certifi
 import ssl
 ssl_context = ssl.create_default_context(cafile=certifi.where())
-
+import requests
 from tqdm import notebook    #ex: for i in notebook.tqdm(range(1,100000000)):
-
+from bs4 import BeautifulSoup
 import os
 # Get the API key from the environment variable
 apikey = os.getenv('FMP_API_KEY')
@@ -50,6 +50,92 @@ def _isin(isin):
     return json.loads(data)
 
 #-------------------------------------------------------
+import os
+import requests
+import pandas as pd
+from bs4 import BeautifulSoup
+
+# 'apikey' is assumed to be assigned at the module level
+
+def get_filing_context(ticker, download_path, n_10k=4):
+    """
+    Downloads a chronological 'bridge' of actual SEC filing documents for LLM analysis.
+
+    This function bypasses the SEC's iXBRL index shells and "drills down" to 
+    retrieve the primary .html report bodies. It ensures a complete data 
+    history by finding the Nth most recent 10-K and pulling every 10-Q 
+    filed subsequently.
+
+    Args:
+        ticker (str): The stock symbol to fetch (e.g., 'BR' or 'AMKR').
+        download_path (str): The local directory path where files will be saved.
+        n_10k (int, optional): The number of annual reports to look back. 
+            Defaults to 4.
+
+    Returns:
+        str: A summary message indicating the number of full reports successfully 
+            saved to the specified directory, or None if no data is found.
+
+    Notes:
+        - Files are saved as '{TICKER}_{TYPE}_{DATE}.html' for easy LLM ingestion.
+        - Requires a descriptive 'User-Agent' header to comply with SEC server rules.
+        - Primary report files are typically 1MB–5MB, unlike 14KB index shells.
+    """
+    # 1. Fetch metadata specifically for 10-K and 10-Q to build the bridge
+    frames = []
+    for f_type in ['10-K', '10-Q']:
+        url = f"https://financialmodelingprep.com/api/v3/sec_filings/{ticker}?type={f_type}&limit=100&apikey={apikey}"
+        df_type = pd.read_json(url)
+        if not df_type.empty:
+            frames.append(df_type)
+            
+    if not frames:
+        return None
+    
+    all_filings = pd.concat(frames).sort_values('acceptedDate', ascending=False)
+    
+    # 2. Identify the cutoff date from the Nth 10-K
+    k_filings = all_filings[all_filings['type'] == '10-K']
+    if len(k_filings) < n_10k:
+        n_10k = len(k_filings)
+        
+    cutoff_date = pd.to_datetime(k_filings.iloc[n_10k-1]['acceptedDate'])
+    
+    # 3. Filter for the 'Package' (all 10-K/Qs since the oldest target 10-K)
+    targets = all_filings[pd.to_datetime(all_filings['acceptedDate']) >= cutoff_date].copy()
+
+    # 4. Download actual documents (drilling past index pages)
+    os.makedirs(download_path, exist_ok=True)
+    headers = {'User-Agent': 'ResearchBot research@yourdomain.com'} 
+
+    print(f"Downloading {len(targets)} reports for {ticker} (Targeting {n_10k} 10-Ks)...")
+
+    for _, row in targets.iterrows():
+        try:
+            # Step A: Get the Index Page to find the real file link
+            index_res = requests.get(row['link'], headers=headers)
+            soup = BeautifulSoup(index_res.text, 'html.parser')
+            
+            # Step B: Locate the primary document table
+            table = soup.find('table', {'class': 'tableFile', 'summary': 'Document Format Files'})
+            if table:
+                # The first link in this table is the primary report
+                relative_link = table.find('a')['href']
+                direct_url = f"https://www.sec.gov{relative_link}"
+                
+                # Step C: Download the real content
+                final_res = requests.get(direct_url, headers=headers)
+                date_str = pd.to_datetime(row['acceptedDate']).strftime('%Y%m%d')
+                filename = f"{ticker}_{row['type']}_{date_str}.html".replace('/', '-')
+                
+                with open(os.path.join(download_path, filename), 'w', encoding='utf-8') as f:
+                    f.write(final_res.text)
+                print(f"  Saved: {filename} ({len(final_res.content)//1024} KB)")
+        except Exception as e:
+            print(f"  Failed {row['type']} from {row['acceptedDate']}: {e}")
+
+    return f"Completed download of {len(targets)} actual reports to {download_path}."
+#-----------------------------------------------------
 def renCol(df, a):
     """
 inputs:  df is a Series (single column dataframe)
