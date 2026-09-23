@@ -7,6 +7,13 @@ from pandas.tseries.holiday import (
     AbstractHolidayCalendar,
     Holiday,
     nearest_workday,
+    sunday_to_monday,
+    GoodFriday,
+    USMartinLutherKingJr,
+    USPresidentsDay,
+    USMemorialDay,
+    USLaborDay,
+    USThanksgivingDay,
     USFederalHolidayCalendar
 )
 from pandas.tseries.offsets import CustomBusinessDay
@@ -78,22 +85,39 @@ def ddelt(d, start=pd.Timestamp.today()):
         last_business_days = last_business_days[last_business_days != holiday]
     return last_business_days[-d].strftime('%Y-%m-%d')
 
-def ytd(today=pd.Timestamp.today()):
+class NYSEHolidayCalendar(AbstractHolidayCalendar):
+    """NYSE full-day closures.  Unlike USFederalHolidayCalendar: adds Good Friday and
+    Juneteenth (2022+), drops Columbus/Veterans Day, and a Saturday New Year's Day is
+    not observed on the prior Friday."""
+    rules = [
+        Holiday('NewYearsDay', month=1, day=1, observance=sunday_to_monday),
+        USMartinLutherKingJr,
+        USPresidentsDay,
+        GoodFriday,
+        USMemorialDay,
+        Holiday('Juneteenth', month=6, day=19, start_date='2022-01-01', observance=nearest_workday),
+        Holiday('IndependenceDay', month=7, day=4, observance=nearest_workday),
+        USLaborDay,
+        USThanksgivingDay,
+        Holiday('Christmas', month=12, day=25, observance=nearest_workday),
+    ]
+
+# one-off NYSE closures (national days of mourning, Hurricane Sandy)
+NYSE_SPECIAL_CLOSURES = pd.to_datetime(['2004-06-11', '2007-01-02', '2012-10-29', '2012-10-30',
+                                        '2018-12-05', '2025-01-09'])
+
+def ytd(today=None):
     """
-    input: date as a string 'YYYY-mm-dd' default is today
-    returns:  trading day of that year as int
-    
+    input: date as a string 'YYYY-mm-dd' or Timestamp, default is today
+    returns:  number of NYSE trading days in that year through `today` as int
+              (so px.iloc[-ytd()-1] is the prior year's last close for a US series)
     """
-    if isinstance(today, str):
-        today = pd.to_datetime(today)
-    trading_calendar = USFederalHolidayCalendar()
-    bday_us = CustomBusinessDay(calendar=trading_calendar)
-    last_year_end = pd.Timestamp(year=today.year - 1, month=12, day=31)
-    last_year_bdays = pd.date_range(start=last_year_end, end=today, freq=bday_us)
-    holidays_last_year = trading_calendar.holidays(start=last_year_end, end=today)
-    for holiday in holidays_last_year:
-        last_year_bdays = last_year_bdays[last_year_bdays != holiday]
-    return len(last_year_bdays)
+    today = pd.Timestamp.today() if today is None else pd.to_datetime(today)
+    today = today.normalize()
+    year_start = pd.Timestamp(year=today.year, month=1, day=1)
+    holidays = NYSEHolidayCalendar().holidays(start=year_start, end=today)
+    holidays = holidays.union(NYSE_SPECIAL_CLOSURES)
+    return len(pd.date_range(start=year_start, end=today, freq=CustomBusinessDay(holidays=holidays)))
 
 def listFrSht(sName='Sectors', fpath='helperfiles/tickerLists.xlsx'):
     """
