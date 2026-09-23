@@ -68,22 +68,20 @@ def symlistConv(syms):
     syms = tuple(syms)
     return ','.join(syms)
 
-def ddelt(d, start=pd.Timestamp.today()):
+def ddelt(d, start=None):
     """
-    input: d = number of days as an int 
-           start= reference date as str 'YYYY-mm-dd'
-           returns the date of d days prior to start as str 'YYYY-mm-dd'
-         
-    
+    input: d = number of NYSE trading days as an int
+           start= reference date as str 'YYYY-mm-dd' or Timestamp, default is today
+           returns the date of the d-th trading day counting back from start (start itself
+           is day 1 if it's a trading day) as str 'YYYY-mm-dd'
     """
-    trading_calendar = USFederalHolidayCalendar()
-    bday_us = CustomBusinessDay(calendar=trading_calendar)
-    today = start
-    last_business_days = pd.date_range(end=today, periods=15000, freq=bday_us)
-    holidays_last_days = trading_calendar.holidays(start=last_business_days[0], end=last_business_days[-1])
-    for holiday in holidays_last_days:
-        last_business_days = last_business_days[last_business_days != holiday]
-    return last_business_days[-d].strftime('%Y-%m-%d')
+    start = pd.Timestamp.today() if start is None else pd.to_datetime(start)
+    start = start.normalize()
+    window_start = start - pd.Timedelta(days=int(d * 1.6) + 15)
+    holidays = NYSEHolidayCalendar().holidays(start=window_start, end=start)
+    holidays = holidays.union(NYSE_SPECIAL_CLOSURES)
+    days = pd.date_range(start=window_start, end=start, freq=CustomBusinessDay(holidays=holidays))
+    return days[-d].strftime('%Y-%m-%d')
 
 class NYSEHolidayCalendar(AbstractHolidayCalendar):
     """NYSE full-day closures.  Unlike USFederalHolidayCalendar: adds Good Friday and
