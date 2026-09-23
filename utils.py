@@ -1,6 +1,7 @@
 ##edited 2/17/25  modified cagr and added cagrTS, added dateSlice
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
+from scipy.stats import linregress
 from datetime import datetime 
 from io import StringIO
 from pandas.tseries.holiday import (
@@ -271,7 +272,6 @@ inputs
 outputs: slope, intercept, r_value, p_value, std_err                   
     
     """
-    from scipy.stats import linregress
     slope, intercept, r_value, p_value, std_err = linregress(X, Y)
     if _print:
         print(f'eq:  y = {slope: .3f}x + {intercept:.3f}')
