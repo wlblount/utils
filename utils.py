@@ -25,6 +25,7 @@ import pandas as pd
 import pytz
 from urllib.request import urlopen
 import json
+import re
 import certifi
 import ssl
 ssl_context = ssl.create_default_context(cafile=certifi.where())
@@ -40,9 +41,7 @@ if not apikey:
     raise ValueError("API key not found. Please set the environment variable 'FMP_API_KEY'.")
 
 ##an assortment of utilities 1/30/25    http://localhost:8888/files/utils2.py?_xsrf=2%7C99db802f%7C89f4b4ca8ca6b51ddb8ecd532175eec7%7C1735847160
-#-------------------------------------------------------------------import certifi
-import ssl
-ssl_context = ssl.create_default_context(cafile=certifi.where())
+#-------------------------------------------------------------------
 def _isin(isin):
     url = f"https://financialmodelingprep.com/api/v4/search/isin?isin={isin}&apikey="+apikey
     response = urlopen(url, context=ssl_context)
@@ -384,8 +383,6 @@ cleans up FMP symbols from screen.  remove symbols with "." (foreigh stocks)
 and symboils with "-" (preferred stocks)
     """
     return [item for item in lst if '-' not in item and '.' not in item]
-
-from datetime import datetime
 
 def cagr(start_date, end_date, start_value, end_value):
     """
@@ -805,10 +802,6 @@ def parseBBsymbols(data, output_type='list', extra_columns=None):
             result.append(stock_dict)
         return result
 #----------------------------------------------------------------------------------------------
-import csv
-import os
-from datetime import datetime
-import re
 
 def portFromFMP(var_name='portfolio', 
                 csv_path=r"C:\Users\bblou\OneDrive\Desktop\Temp\ExpPort.csv", 
