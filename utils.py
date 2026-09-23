@@ -50,10 +50,6 @@ def _isin(isin):
     return json.loads(data)
 
 #-------------------------------------------------------
-import os
-import requests
-import pandas as pd
-from bs4 import BeautifulSoup
 
 # 'apikey' is assumed to be assigned at the module level
 
